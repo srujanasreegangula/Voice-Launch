@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoxLaunch 2026 — Neural Voice Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg:#05060b;--bg2:#0c0e18;--bg3:#121525;
+  --fg:#e4e8f7;--muted:#5a6384;--dim:#3a4263;
+  --accent:#00f0ff;--accent2:#a855f7;--accent3:#f472b6;
+  --green:#22d3a7;--red:#ef4444;--amber:#f59e0b;
+  --glow:rgba(0,240,255,.35);--glow2:rgba(168,85,247,.3);--glow3:rgba(244,114,182,.25);
+  --glass:rgba(12,14,24,.6);--glass2:rgba(18,21,37,.5);
+  --border:rgba(0,240,255,.1);--border2:rgba(168,85,247,.1);
+  --r:16px;--r2:12px;--r3:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+
+/* ===== CANVAS BG ===== */
+#neuralCanvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+/* ===== GLOBAL LAYERS ===== */
+.scanline{position:fixed;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,240,255,.008) 2px,rgba(0,240,255,.008) 4px)}
+.hologrid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.4;background-image:
+  linear-gradient(rgba(0,240,255,.04) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,240,255,.04) 1px,transparent 1px);
+  background-size:80px 80px;
+  animation:gridScroll 30s linear infinite}
+@keyframes gridScroll{to{background-position:80px 80px}}
+.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,rgba(5,6,11,.7) 100%)}
+
+/* ===== LAYOUT ===== */
+.main{position:relative;z-index:2;max-width:1200px;margin:0 auto;padding:20px 20px 60px}
+
+/* ===== NAV ===== */
+nav{display:flex;align-items:center;justify-content:space-between;padding:16px 0 12px;position:relative}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-hex{width:42px;height:42px;clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--bg);position:relative}
+.brand-hex::after{content:'';position:absolute;inset:-3px;clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);background:linear-gradient(135deg,var(--accent),var(--accent2));opacity:.3;z-index:-1;filter:blur(8px)}
+.brand-name{font-family:'Orbitron',sans-serif;font-weight:800;font-size:20px;letter-spacing:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.brand-tag{font-size:10px;letter-spacing:3px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+
+.nav-status{display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:100px;background:var(--glass);border:1px solid var(--border);backdrop-filter:blur(16px);font-size:12px;color:var(--muted);font-weight:500}
+.nav-dot{width:6px;height:6px;border-radius:50%;background:var(--dim);transition:all .4s}
+.nav-dot.live{background:var(--green);box-shadow:0 0 8px rgba(34,211,167,.5);animation:livePulse 2s infinite}
+.nav-dot.dead{background:var(--red);box-shadow:0 0 8px rgba(239,68,68,.4)}
+.nav-dot.warn{background:var(--amber);box-shadow:0 0 8px rgba(245,158,11,.4)}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+.year-badge{font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;padding:5px 12px;border-radius:6px;background:linear-gradient(135deg,rgba(0,240,255,.1),rgba(168,85,247,.1));border:1px solid var(--border2);color:var(--accent2)}
+
+/* ===== DIAGNOSTIC ===== */
+.diag{background:var(--glass);border:1px solid var(--border);border-radius:20px;padding:32px 28px;margin-bottom:28px;backdrop-filter:blur(20px);position:relative;overflow:hidden}
+.diag::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),var(--accent2),transparent)}
+.diag-hdr{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.diag-hdr i{font-size:18px;color:var(--accent)}
+.diag-hdr h2{font-family:'Orbitron',sans-serif;font-weight:700;font-size:16px;letter-spacing:1px}
+.diag-sub{color:var(--muted);font-size:13px;margin-bottom:22px;padding-left:28px}
+
+.diag-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.diag-item{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:var(--r2);background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.04);transition:all .4s;position:relative}
+.diag-item.pass{border-color:rgba(34,211,167,.2);background:rgba(34,211,167,.03)}
+.diag-item.fail{border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.03)}
+.diag-item.run{border-color:rgba(0,240,255,.2);background:rgba(0,240,255,.03)}
+.diag-item.skip{border-color:rgba(245,158,11,.15);background:rgba(245,158,11,.02)}
+.diag-ic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-top:2px}
+.diag-ic.pass{background:rgba(34,211,167,.12);color:var(--green)}
+.diag-ic.fail{background:rgba(239,68,68,.12);color:var(--red)}
+.diag-ic.run{background:rgba(0,240,255,.12);color:var(--accent);animation:icSpin 1s linear infinite}
+.diag-ic.skip{background:rgba(245,158,11,.1);color:var(--amber)}
+.diag-ic.idle{background:rgba(90,99,132,.1);color:var(--dim)}
+@keyframes icSpin{to{transform:rotate(360deg)}}
+.diag-body{flex:1;min-width:0}
+.diag-body strong{display:block;font-size:13px;font-weight:600;margin-bottom:2px}
+.diag-body small{color:var(--muted);font-size:11px;line-height:1.5}
+.diag-fix{margin-top:10px;padding:12px 14px;border-radius:var(--r3);background:rgba(0,240,255,.04);border:1px solid rgba(0,240,255,.1);font-size:12px;color:var(--accent);line-height:1.7;display:none}
+.diag-fix.show{display:block}
+.diag-fix ol{padding-left:18px;margin-top:4px}
+.diag-fix li{margin-bottom:2px}
+.diag-fix code{background:rgba(0,240,255,.1);padding:1px 6px;border-radius:4px;font-size:11px;font-family:'Inter',monospace}
+
+.diag-btn{padding:14px;border:none;border-radius:var(--r2);font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;cursor:pointer;transition:all .3s;width:100%;position:relative;overflow:hidden}
+.diag-btn.start{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--bg)}
+.diag-btn.start:hover{box-shadow:0 0 30px var(--glow),0 0 30px var(--glow2);transform:translateY(-2px)}
+.diag-btn.start:active{transform:scale(.98)}
+.diag-btn.start:disabled{opacity:.4;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+.diag-btn.retry{background:transparent;border:1px solid var(--border);color:var(--accent);margin-top:8px}
+.diag-btn.retry:hover{background:rgba(0,240,255,.05);border-color:var(--accent)}
+
+.diag-log{margin-top:14px;padding:12px;border-radius:var(--r3);background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.03);font-family:'Inter',monospace;font-size:10px;color:var(--muted);max-height:140px;overflow-y:auto;line-height:1.8;display:none}
+.diag-log.show{display:block}
+.log-g{color:var(--green)}.log-r{color:var(--red)}.log-y{color:var(--amber)}.log-c{color:var(--accent)}
+
+/* ===== VOICE CENTER ===== */
+.voice{display:flex;flex-direction:column;align-items:center;padding:20px 16px 44px}
+
+.orb-wrap{position:relative;width:200px;height:200px;margin-bottom:28px}
+.orb-ring{position:absolute;border-radius:50%;border:1px solid transparent;transition:all .5s}
+.orb-ring.r1{inset:0;border-color:rgba(0,240,255,.08);animation:orbSpin 25s linear infinite}
+.orb-ring.r2{inset:12px;border-color:rgba(168,85,247,.06);animation:orbSpin 18s linear infinite reverse}
+.orb-ring.r3{inset:24px;border-color:rgba(244,114,182,.05);animation:orbSpin 30s linear infinite}
+.orb-ring.r1.on{border-color:rgba(0,240,255,.25);box-shadow:0 0 40px rgba(0,240,255,.08)}
+.orb-ring.r2.on{border-color:rgba(168,85,247,.2);box-shadow:0 0 30px rgba(168,85,247,.06)}
+.orb-ring.r3.on{border-color:rgba(244,114,182,.15);box-shadow:0 0 20px rgba(244,114,182,.05)}
+@keyframes orbSpin{to{transform:rotate(360deg)}}
+
+.orb-core{position:absolute;inset:40px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#1a1e35,#0a0c18);border:2px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .5s cubic-bezier(.4,0,.2,1);outline:none}
+.orb-core:hover{border-color:var(--accent);box-shadow:0 0 40px rgba(0,240,255,.12)}
+.orb-core:focus-visible{outline:2px solid var(--accent);outline-offset:6px}
+.orb-core.on{border-color:var(--accent);background:radial-gradient(circle at 35% 35%,rgba(0,240,255,.08),rgba(168,85,247,.05),#0a0c18);box-shadow:0 0 60px var(--glow),0 0 40px var(--glow2),inset 0 0 30px rgba(0,240,255,.05)}
+.orb-core.off{opacity:.3;cursor:not-allowed}
+.orb-core i{font-size:38px;color:var(--muted);transition:all .4s}
+.orb-core:hover i{color:var(--accent)}
+.orb-core.on i{color:var(--accent);filter:drop-shadow(0 0 12px var(--glow))}
+
+/* Pulse wave when active */
+.orb-pulse{position:absolute;inset:36px;border-radius:50%;border:1px solid var(--accent);opacity:0;pointer-events:none}
+.orb-core.on ~ .orb-pulse{animation:orbPulse 2s ease-out infinite}
+@keyframes orbPulse{0%{transform:scale(1);opacity:.4}100%{transform:scale(1.8);opacity:0}}
+
+.viz-wrap{display:flex;align-items:center;justify-content:center;gap:2px;height:36px;margin-bottom:22px;opacity:0;transition:opacity .4s}
+.viz-wrap.on{opacity:1}
+.vb{width:3px;border-radius:3px;background:linear-gradient(to top,var(--accent),var(--accent2));height:4px;transition:height .08s}
+
+.transcript{width:100%;max-width:580px;min-height:56px;background:var(--glass);border:1px solid var(--border);border-radius:var(--r);padding:14px 22px;text-align:center;font-size:17px;font-weight:500;backdrop-filter:blur(16px);margin-bottom:8px;display:flex;align-items:center;justify-content:center;line-height:1.5;transition:all .4s}
+.transcript.on{border-color:rgba(0,240,255,.3);box-shadow:0 0 24px rgba(0,240,255,.08)}
+.transcript .ph{color:var(--dim);font-weight:400;font-size:14px}
+
+.feedback{min-height:22px;font-size:13px;font-weight:500;color:var(--accent);opacity:0;transition:opacity .3s;margin-bottom:16px}
+.feedback.vis{opacity:1}
+.feedback.err{color:var(--red)}
+
+.hint-line{font-size:11px;color:var(--dim);text-align:center;letter-spacing:.5px}
+.hint-line kbd{background:rgba(0,240,255,.08);color:var(--accent);padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;font-family:'Inter',sans-serif;border:1px solid rgba(0,240,255,.12)}
+
+/* ===== SECTIONS ===== */
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.03)}
+.sec-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.sec-badge{font-size:10px;padding:3px 10px;border-radius:100px;font-weight:600;background:rgba(0,240,255,.06);color:var(--accent);border:1px solid rgba(0,240,255,.1)}
+
+/* ===== APP GRID ===== */
+.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:40px}
+.app{background:var(--glass2);border:1px solid rgba(255,255,255,.04);border-radius:var(--r2);padding:18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:all .35s cubic-bezier(.4,0,.2,1);backdrop-filter:blur(8px);outline:none;position:relative;overflow:hidden}
+.app::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transform:scaleX(0);transition:transform .35s;transform-origin:left}
+.app:hover::after,.app:focus-visible::after{transform:scaleX(1)}
+.app:hover,.app:focus-visible{border-color:rgba(0,240,255,.2);transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,0,0,.4),0 0 20px rgba(0,240,255,.06)}
+.app:active{transform:translateY(-1px) scale(.98)}
+.app.flash{animation:aFlash .5s ease}
+@keyframes aFlash{50%{box-shadow:0 0 30px var(--glow);border-color:var(--accent)}}
+.app-ic{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#fff;position:relative}
+.app-ic::after{content:'';position:absolute;inset:-2px;border-radius:13px;background:inherit;opacity:.2;filter:blur(8px);z-index:-1}
+.app-nm{font-weight:600;font-size:12px;text-align:center;letter-spacing:.3px}
+.app-cat{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);font-weight:500}
+
+/* ===== HISTORY ===== */
+.hist{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;margin-bottom:40px;padding-right:4px}
+.hist::-webkit-scrollbar{width:3px}
+.hist::-webkit-scrollbar-thumb{background:var(--dim);border-radius:3px}
+.h-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--glass2);border:1px solid rgba(255,255,255,.03);border-radius:var(--r3);animation:hIn .3s ease}
+@keyframes hIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+.h-ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;flex-shrink:0}
+.h-tx{flex:1;min-width:0}
+.h-cmd{font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-tm{font-size:9px;color:var(--dim);margin-top:1px}
+.h-st{font-size:9px;font-weight:700;padding:2px 8px;border-radius:100px;flex-shrink:0;letter-spacing:.5px}
+.h-st.ok{background:rgba(34,211,167,.1);color:var(--green)}
+.h-st.no{background:rgba(239,68,68,.1);color:var(--red)}
+.h-empty{text-align:center;padding:28px 16px;color:var(--dim);font-size:12px}
+.h-empty i{font-size:24px;display:block;margin-bottom:6px;opacity:.25}
+
+.clear-b{background:none;border:1px solid rgba(255,255,255,.06);color:var(--dim);padding:3px 10px;border-radius:100px;font-size:10px;cursor:pointer;font-family:inherit;transition:all .2s;font-weight:500}
+.clear-b:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ===== HELP ===== */
+.help-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:40px}
+.help-c{background:var(--glass2);border:1px solid rgba(255,255,255,.03);border-radius:var(--r2);padding:14px 16px;backdrop-filter:blur(8px)}
+.help-c h4{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.help-c h4.i1{color:var(--accent)}.help-c h4.i2{color:var(--accent2)}.help-c h4.i3{color:var(--accent3)}
+.help-c p{font-size:11px;color:var(--muted);line-height:1.7}
+.help-c code{background:rgba(0,240,255,.06);color:var(--accent);padding:1px 5px;border-radius:3px;font-size:10px}
+
+/* ===== TOAST ===== */
+.toast-box{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{padding:10px 16px;border-radius:var(--r3);background:var(--bg2);border:1px solid var(--border);backdrop-filter:blur(16px);font-size:12px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 24px rgba(0,0,0,.5);max-width:300px;pointer-events:auto;animation:tIn .3s ease,tOut .3s ease 2.6s forwards}
+.toast i{font-size:14px}
+.toast.ok{border-color:rgba(34,211,167,.2)}.toast.ok i{color:var(--green)}
+.toast.err{border-color:rgba(239,68,68,.2)}.toast.err i{color:var(--red)}
+.toast.inf{border-color:rgba(0,240,255,.2)}.toast.inf i{color:var(--accent)}
+@keyframes tIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tOut{to{opacity:0;transform:translateY(-12px)}}
+
+footer{text-align:center;padding:20px 0;font-size:10px;color:var(--dim);border-top:1px solid rgba(255,255,255,.03);letter-spacing:1px}
+
+@media(max-width:640px){
+  .apps{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .orb-wrap{width:160px;height:160px}
+  .orb-core{inset:32px}.orb-core i{font-size:30px}
+  nav{flex-wrap:wrap;gap:10px}
+  .main{padding:14px 12px 40px}
+  .diag{padding:24px 18px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<canvas id="neuralCanvas"></canvas>
+<div class="hologrid"></div>
+<div class="scanline"></div>
+<div class="vignette"></div>
+<div class="toast-box" id="toasts"></div>
+
+<div class="main">
+  <nav>
+    <div class="brand">
+      <div class="brand-hex"><i class="fas fa-bolt"></i></div>
+      <div>
+        <div class="brand-name">VOXLAUNCH</div>
+        <div class="brand-tag">Neural Voice Interface</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="year-badge">2026</span>
+      <div class="nav-status">
+        <span class="nav-dot" id="navDot"></span>
+        <span id="navTxt">Standby</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- DIAGNOSTIC -->
+  <section class="diag" id="diagPanel">
+    <div class="diag-hdr"><i class="fas fa-wave-square"></i><h2>System Diagnostic</h2></div>
+    <p class="diag-sub">Run a full check to identify and fix microphone issues before enabling voice commands.</p>
+    <div class="diag-list" id="diagList">
+      <div class="diag-item" id="d1"><div class="diag-ic idle" id="d1i"><i class="fas fa-circle" style="font-size:6px"></i></div><div class="diag-body"><strong>Speech Recognition API</strong><small id="d1t">Pending check...</small><div class="diag-fix" id="d1f"></div></div></div>
+      <div class="diag-item" id="d2"><div class="diag-ic idle" id="d2i"><i class="fas fa-circle" style="font-size:6px"></i></div><div class="diag-body"><strong>Secure Context (HTTPS / Localhost)</strong><small id="d2t">Pending check...</small><div class="diag-fix" id="d2f"></div></div></div>
+      <div class="diag-item" id="d3"><div class="diag-ic idle" id="d3i"><i class="fas fa-circle" style="font-size:6px"></i></div><div class="diag-body"><strong>Microphone Permission</strong><small id="d3t">Pending check...</small><div class="diag-fix" id="d3f"></div></div></div>
+      <div class="diag-item" id="d4"><div class="diag-ic idle" id="d4i"><i class="fas fa-circle" style="font-size:6px"></i></div><div class="diag-body"><strong>Speech Engine Start</strong><small id="d4t">Pending check...</small><div class="diag-fix" id="d4f"></div></div></div>
+    </div>
+    <button class="diag-btn start" id="diagBtn" onclick="runDiag()"><i class="fas fa-play" style="margin-right:8px"></i>Run Diagnostics</button>
+    <div class="diag-log" id="dlog"></div>
+  </section>
+
+  <!-- VOICE -->
+  <section class="voice">
+    <div class="orb-wrap">
+      <div class="orb-ring r1" id="oR1"></div>
+      <div class="orb-ring r2" id="oR2"></div>
+      <div class="orb-ring r3" id="oR3"></div>
+      <button class="orb-core off" id="orbBtn" aria-label="Voice command">
+        <i class="fas fa-microphone"></i>
+      </button>
+      <div class="orb-pulse"></div>
+    </div>
+    <div class="viz-wrap" id="viz"></div>
+    <div class="transcript" id="tsc"><span class="ph">Run diagnostics to unlock voice commands</span></div>
+    <div class="feedback" id="fb"></div>
+    <p class="hint-line"><kbd>Space</kbd> toggle &middot; Say <strong>"Open"</strong> + app name &middot; Click any card to launch</p>
+  </section>
+
+  <!-- APPS -->
+  <section>
+    <div class="sec-head"><h2 class="sec-title">Applications</h2><span class="sec-badge" id="aCt">0</span></div>
+    <div class="apps" id="aGrid"></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section>
+    <div class="sec-head"><h2 class="sec-title">Command Log</h2><button class="clear-b" onclick="hist=[];rHist();toast('Log cleared','inf')">Clear</button></div>
+    <div class="hist" id="hList"><div class="h-empty"><i class="fas fa-terminal"></i>No commands logged</div></div>
+  </section>
+
+  <!-- HELP -->
+  <section>
+    <div class="sec-head"><h2 class="sec-title">Reference</h2></div>
+    <div class="help-g">
+      <div class="help-c"><h4 class="i1"><i class="fas fa-microphone-lines"></i> Voice Commands</h4><p><code>"Open Google"</code> <code>"Go to reddit.com"</code> <code>"Launch Spotify"</code> <code>"Visit stackoverflow"</code></p></div>
+      <div class="help-c"><h4 class="i2"><i class="fas fa-shield-halved"></i> Microphone Fix</h4><p>Address bar → Lock icon → Microphone → Allow<br>Must use <code>http://localhost</code> not <code>file://</code><br>Chrome: <code>chrome://settings/content/microphone</code></p></div>
+      <div class="help-c"><h4 class="i3"><i class="fas fa-server"></i> Local Server</h4><p><code>python -m http.server 5500</code><br><code>npx serve .</code><br>Then open <code>http://localhost:5500</code></p></div>
+    </div>
+  </section>
+
+  <footer>VOXLAUNCH 2026 &middot; NEURAL VOICE INTERFACE &middot; WEB SPEECH API</footer>
+</div>
+
+<script>
+// ===== DATA =====
+const A=[
+  {n:'Google',u:'https://www.google.com',i:'fab fa-google',c:'#4285F4',cat:'Search',al:['google','search']},
+  {n:'YouTube',u:'https://www.youtube.com',i:'fab fa-youtube',c:'#FF0000',cat:'Video',al:['youtube','yt']},
+  {n:'Gmail',u:'https://mail.google.com',i:'fas fa-envelope',c:'#EA4335',cat:'Email',al:['gmail','email']},
+  {n:'GitHub',u:'https://github.com',i:'fab fa-github',c:'#8B5CF6',cat:'Dev',al:['github']},
+  {n:'X / Twitter',u:'https://x.com',i:'fab fa-x-twitter',c:'#1DA1F2',cat:'Social',al:['twitter','x']},
+  {n:'LinkedIn',u:'https://www.linkedin.com',i:'fab fa-linkedin-in',c:'#0A66C2',cat:'Social',al:['linkedin']},
+  {n:'Reddit',u:'https://www.reddit.com',i:'fab fa-reddit-alien',c:'#FF4500',cat:'Forum',al:['reddit']},
+  {n:'Wikipedia',u:'https://www.wikipedia.org',i:'fab fa-wikipedia-w',c:'#636466',cat:'Ref',al:['wikipedia','wiki']},
+  {n:'Amazon',u:'https://www.amazon.com',i:'fab fa-amazon',c:'#FF9900',cat:'Shop',al:['amazon']},
+  {n:'Netflix',u:'https://www.netflix.com',i:'fas fa-film',c:'#E50914',cat:'Video',al:['netflix']},
+  {n:'Spotify',u:'https://open.spotify.com',i:'fab fa-spotify',c:'#1DB954',cat:'Music',al:['spotify']},
+  {n:'Stack Overflow',u:'https://stackoverflow.com',i:'fab fa-stack-overflow',c:'#F48024',cat:'Dev',al:['stack overflow','stackoverflow']},
+  {n:'Facebook',u:'https://www.facebook.com',i:'fab fa-facebook-f',c:'#1877F2',cat:'Social',al:['facebook','fb']},
+  {n:'Instagram',u:'https://www.instagram.com',i:'fab fa-instagram',c:'#E4405F',cat:'Social',al:['instagram','insta']},
+  {n:'Twitch',u:'https://www.twitch.tv',i:'fab fa-twitch',c:'#9146FF',cat:'Live',al:['twitch']},
+  {n:'Discord',u:'https://discord.com',i:'fab fa-discord',c:'#5865F2',cat:'Chat',al:['discord']},
+  {n:'Pinterest',u:'https://www.pinterest.com',i:'fab fa-pinterest-p',c:'#BD081C',cat:'Social',al:['pinterest']},
+  {n:'ChatGPT',u:'https://chat.openai.com',i:'fas fa-robot',c:'#10A37F',cat:'AI',al:['chatgpt','chat gpt','openai']},
+  {n:'Maps',u:'https://maps.google.com',i:'fas fa-map-location-dot',c:'#34A853',cat:'Nav',al:['maps','google maps']},
+  {n:'Drive',u:'https://drive.google.com',i:'fab fa-google-drive',c:'#FBBC04',cat:'Cloud',al:['drive','google drive']},
+  {n:'Translate',u:'https://translate.google.com',i:'fas fa-language',c:'#4285F4',cat:'Tools',al:['translate']},
+  {n:'Figma',u:'https://www.figma.com',i:'fab fa-figma',c:'#A259FF',cat:'Design',al:['figma']},
+  {n:'Medium',u:'https://medium.com',i:'fab fa-medium',c:'#00AB6C',cat:'Blog',al:['medium']},
+  {n:'Calendar',u:'https://calendar.google.com',i:'fas fa-calendar-days',c:'#0B8043',cat:'Prod',al:['calendar']},
+];
+
+// ===== STATE =====
+let on=false,rec=null,hist=[],vB=[],vA=null,micOK=false;
+const $=id=>document.getElementById(id);
+
+// ===== NEURAL BG =====
+!function(){
+  const cv=$('neuralCanvas'),cx=cv.getContext('2d');let ps=[];
+  const rz=()=>{cv.width=innerWidth;cv.height=innerHeight};rz();addEventListener('resize',rz);
+  class N{constructor(){this.r()}r(){this.x=Math.random()*cv.width;this.y=Math.random()*cv.height;this.s=Math.random()*1.5+.3;this.vx=(Math.random()-.5)*.2;this.vy=(Math.random()-.5)*.2;this.o=Math.random()*.25+.05;this.p=Math.random()*6.28;this.h=Math.random()>.5?180:280}u(){this.x+=this.vx;this.y+=this.vy;this.p+=.012;if(this.x<0||this.x>cv.width||this.y<0||this.y>cv.height)this.r()}d(){const o=this.o*(.5+.5*Math.sin(this.p));cx.beginPath();cx.arc(this.x,this.y,Math.max(.1,this.s),0,6.28);cx.fillStyle=this.h>200?`rgba(168,85,247,${o})`:`rgba(0,240,255,${o})`;cx.fill()}}
+  for(let i=0;i<60;i++)ps.push(new N());
+  function ln(){for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){const dx=ps[i].x-ps[j].x,dy=ps[i].y-ps[j].y,d=Math.sqrt(dx*dx+dy*dy);if(d<120){const o=(1-d/120)*.05;cx.beginPath();cx.moveTo(ps[i].x,ps[i].y);cx.lineTo(ps[j].x,ps[j].y);const g=cx.createLinearGradient(ps[i].x,ps[i].y,ps[j].x,ps[j].y);g.addColorStop(0,`rgba(0,240,255,${o})`);g.addColorStop(1,`rgba(168,85,247,${o})`);cx.strokeStyle=g;cx.lineWidth=.5;cx.stroke()}}}
+  !function anim(){cx.clearRect(0,0,cv.width,cv.height);ps.forEach(p=>{p.u();p.d()});ln();requestAnimationFrame(anim)}();
+}();
+
+// ===== DIAG =====
+function dSet(n,s,msg,fix){
+  const r=$('d'+n),ic=$('d'+n+'i'),t=$('d'+n+'t'),f=$('d'+n+'f');
+  r.className='diag-item '+s;
+  ic.className='diag-ic '+s;
+  const icons={pass:'fas fa-check',fail:'fas fa-xmark',run:'fas fa-spinner fa-spin',skip:'fas fa-forward',idle:'fas fa-circle'};
+  ic.innerHTML=`<i class="${icons[s]||icons.idle}" style="font-size:${s==='idle'?'6px':'12px'}"></i>`;
+  t.textContent=msg;
+  if(fix){f.innerHTML=fix;f.classList.add('show')}else f.classList.remove('show');
+}
+function dLog(m,t='c'){$('dlog').classList.add('show');const c={g:'log-g',r:'log-r',y:'log-y',c:'log-c'}[t]||'';$('dlog').innerHTML+=`<div class="${c}">[${new Date().toLocaleTimeString()}] ${m}</div>`;$('dlog').scrollTop=$('dlog').scrollHeight}
+const sl=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function runDiag(){
+  const btn=$('diagBtn');btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin" style="margin-right:8px"></i>Scanning...';
+  $('dlog').innerHTML='';dLog('Initializing diagnostic sequence...','c');
+  for(let i=1;i<=4;i++)dSet(i,'idle','Pending...');
+  let ok=true;
+
+  // CHECK 1: API
+  dSet(1,'run','Checking Speech Recognition API...');dLog('CHECK 1: Probing SpeechRecognition API...','c');
+  await sl(500);
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(SR){dSet(1,'pass','API supported — SpeechRecognition available');dLog('CHECK 1 PASS: SpeechRecognition API detected','g')}
+  else{dSet(1,'fail','API NOT supported in this browser',`<strong>Fix:</strong> Use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.<br>Firefox and Safari lack full Web Speech API support.<br>Detected: <code>${navigator.userAgent.split(') ').pop()}</code>`);dLog('CHECK 1 FAIL: No SpeechRecognition API','r');ok=false}
+
+  // CHECK 2: Protocol
+  dSet(2,'run','Checking secure context...');dLog('CHECK 2: Verifying protocol and security context...','c');
+  await sl(500);
+  const proto=location.protocol,isFile=proto==='file:',isLocal=location.hostname==='localhost'||location.hostname==='127.0.0.1',isSecure=window.isSecureContext;
+  if(isFile){dSet(2,'fail',`Protocol: file:// — BLOCKED`,`
+    <strong>You opened the HTML file directly.</strong> Browsers block microphone on file:// for security.<br><br>
+    <strong>Fix — Start a local server:</strong><br>
+    <ol><li>Open Terminal / Command Prompt</li><li><code>cd</code> to your project folder</li><li>Run <code>python -m http.server 5500</code></li><li>Or <code>npx serve .</code></li><li>Open <code>http://localhost:5500</code> in Chrome</li></ol>
+    <strong>VS Code users:</strong> Install "Live Server" extension → Right-click HTML → "Open with Live Server"
+  `);dLog('CHECK 2 FAIL: file:// protocol — mic permanently blocked on file://','r');ok=false}
+  else if(!isSecure&&!isLocal){dSet(2,'fail',`Protocol: ${proto} — Not secure`,`Open via <code>https://</code> or <code>http://localhost</code>. Current: <code>${location.href}</code>`);dLog(`CHECK 2 FAIL: Insecure context — ${location.href}`,'r');ok=false}
+  else{dSet(2,'pass',`Protocol: ${proto} — Secure (localhost: ${isLocal})`);dLog(`CHECK 2 PASS: ${proto} secure context confirmed`,'g')}
+
+  // CHECK 3: Mic permission
+  dSet(3,'run','Requesting microphone access...');dLog('CHECK 3: Requesting getUserMedia...','c');
+  await sl(400);
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){dSet(3,'fail','getUserMedia API unavailable','Use a modern browser on HTTPS/localhost.');dLog('CHECK 3 FAIL: getUserMedia missing','r');ok=false}
+  else{
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});stream.getTracks().forEach(t=>t.stop());
+      dSet(3,'pass','Microphone GRANTED — hardware active');dLog('CHECK 3 PASS: getUserMedia success','g');
+    }catch(e){
+      ok=false;let fix='';
+      if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError'){
+        fix=`<strong>Microphone permission was denied.</strong> Two ways to fix it:<br><br>
+        <strong>Method 1 — Address bar (fastest):</strong><br>
+        <ol><li>Click the <strong>lock icon</strong> or <strong>mic icon with X</strong> in the address bar</li><li>Set Microphone → <strong>Allow</strong></li><li>Click <strong>Reload</strong></li></ol>
+        <strong>Method 2 — Chrome Settings:</strong><br>
+        <ol><li>Open <code>chrome://settings/content/microphone</code></li><li>Under "Allowed" → Click <strong>Add</strong></li><li>Enter: <code>${location.host}</code></li><li>Add → <strong>Reload this page</strong></li></ol>`;
+        dLog('CHECK 3 FAIL: NotAllowedError — user or policy denied','r');
+      }else if(e.name==='NotFoundError'){fix='No microphone found. Connect one and retry.';dLog('CHECK 3 FAIL: NotFoundError — no mic hardware','r')}
+      else if(e.name==='NotReadableError'){fix='Mic in use by another app. Close it and retry.';dLog('CHECK 3 FAIL: NotReadableError — mic occupied','r')}
+      else{fix=`${e.name}: ${e.message}`;dLog(`CHECK 3 FAIL: ${e.name} — ${e.message}`,'r')}
+      dSet(3,'fail',`Microphone DENIED (${e.name})`,fix);
+    }
+  }
+
+  // CHECK 4: Recognition start
+  dSet(4,'run','Testing speech recognition engine...');dLog('CHECK 4: Starting recognition test...','c');
+  await sl(300);
+  if(!SR){dSet(4,'skip','Skipped — API unavailable (Check 1 failed)');dLog('CHECK 4 SKIP: No API','y')}
+  else if(!ok){dSet(4,'skip','Skipped — fix earlier checks first');dLog('CHECK 4 SKIP: Prior checks failed','y')}
+  else{
+    try{
+      const tr=new SR();tr.lang='en-US';tr.continuous=false;tr.interimResults=false;
+      let done=false;
+      tr.onstart=()=>{if(!done){done=true;dSet(4,'pass','Speech engine started — all systems go');dLog('CHECK 4 PASS: recognition.onstart fired','g');tr.stop();enableVoice()}};
+      tr.onerror=(ev)=>{if(!done){done=true;const fix=ev.error==='not-allowed'?`Blocked by browser policy.<br>Go to <code>chrome://settings/content/microphone</code> → Add <code>${location.host}</code> to Allowed → Reload.`:`Error: ${ev.error} — Reload and retry.`;dSet(4,'fail',`Engine error: ${ev.error}`,fix);dLog(`CHECK 4 FAIL: ${ev.error}`,'r')}};
+      setTimeout(()=>{if(!done){done=true;dSet(4,'fail','Engine timeout (5s)',`Recognition did not start.<br>1. Close other tabs using the mic<br>2. Restart Chrome<br>3. Check antivirus mic blocking`);dLog('CHECK 4 FAIL: Timeout','r');try{tr.stop()}catch(e){}}},5000);
+      tr.start();dLog('CHECK 4: recognition.start() called, awaiting onstart...','c');
+    }catch(e){dSet(4,'fail',`Engine error: ${e.message}`);dLog(`CHECK 4 FAIL: ${e.message}`,'r')}
+  }
+
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-rotate" style="margin-right:8px"></i>Run Again';
+  if(ok){dLog('ALL CHECKS PASSED — Voice interface online','g');$('navDot').className='nav-dot live';$('navTxt').textContent='Online';toast('All systems operational — voice enabled','ok')}
+  else{dLog('DIAGNOSTIC COMPLETE — Issues detected','r');$('navDot').className='nav-dot dead';$('navTxt').textContent='Issues Found';toast('Issues found — see fixes above','err')}
+}
+
+function enableVoice(){
+  micOK=true;$('orbBtn').classList.remove('off');$('tsc').innerHTML='<span class="ph">Tap the orb or press Space to speak...</span>';
+  $('navDot').className='nav-dot live';$('navTxt').textContent='Online';setupRec();
+}
+
+// ===== SPEECH =====
+function setupRec(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;
+  rec=new SR();rec.continuous=false;rec.interimResults=true;rec.lang='en-US';rec.maxAlternatives=1;
+  rec.onstart=()=>{on=true;updUI();animV()};
+  rec.onresult=(e)=>{let it='',ft='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;e.results[i].isFinal?ft+=t:it+=t}if(it){$('tsc').innerHTML=`<span style="color:var(--muted)">${it}</span>`;$('tsc').classList.add('on')}if(ft)cmd(ft.trim())};
+  rec.onerror=(e)=>{if(e.error==='not-allowed'){sFB('Mic permission lost. Run diagnostics again.',true);toast('Permission lost — run diagnostics','err');micOK=false;$('orbBtn').classList.add('off');$('navDot').className='nav-dot dead';$('navTxt').textContent='Lost'}else if(e.error==='no-speech')sFB('No speech detected. Try again.',true);else if(e.error!=='aborted')sFB(`Error: ${e.error}`,true);stopL()};
+  rec.onend=()=>stopL();
+}
+function startL(){if(!rec||!micOK)return;try{rec.start()}catch(e){rec.stop();setTimeout(()=>{try{rec.start()}catch(e2){}},200)}}
+function stopL(){on=false;updUI();if(vA)cancelAnimationFrame(vA);vB.forEach(b=>{b.style.height='4px';b.style.opacity='1'})}
+function togL(){if(!micOK){toast('Run diagnostics first','inf');return}on?rec.stop():startL()}
+function updUI(){
+  const b=$('orbBtn');b.classList.toggle('on',on);
+  $('oR1').classList.toggle('on',on);$('oR2').classList.toggle('on',on);$('oR3').classList.toggle('on',on);
+  $('viz').classList.toggle('on',on);
+  $('navDot').className=on?'nav-dot live':(micOK?'nav-dot live':'nav-dot dead');
+  $('navTxt').textContent=on?'Listening...':(micOK?'Online':'Offline');
+}
+
+// ===== VIZ =====
+function initV(){$('viz').innerHTML='';vB=[];for(let i=0;i<32;i++){const b=document.createElement('div');b.className='vb';$('viz').appendChild(b);vB.push(b)}}
+function animV(){if(!on){vB.forEach(b=>{b.style.height='4px'});return}vB.forEach(b=>{b.style.height=(Math.random()*28+4)+'px';b.style.opacity=(.3+Math.random()*.7).toFixed(2)});vA=requestAnimationFrame(()=>setTimeout(animV,70))}
+
+// ===== COMMANDS =====
+function cmd(t){
+  $('tsc').innerHTML=t;const l=t.toLowerCase().trim();
+  const m=l.match(/^(open|go to|visit|launch|navigate|browse)\s+(.+)$/i);
+  let nm=m?m[2].trim():l,found=null;
+  for(const a of A){const nl=a.n.toLowerCase();if(nm===nl){found=a;break}if(nl.includes(nm)||nm.includes(nl)){found=a;break}for(const al of a.al)if(nm===al||nm.includes(al)){found=a;break}if(found)break}
+  if(found)launch(found);
+  else if(m){let u=m[2].trim().replace(/\s+/g,'');if(!u.includes('.')&&!u.startsWith('http'))u+='.com';if(!u.startsWith('http'))u='https://'+u;launchUrl(u,m[2].trim())}
+  else{sFB(`Unknown: "${t}"`,true);aHist(t,null,false)}
+}
+function launch(a){window.open(a.u,'_blank','noopener');sFB(`Launching ${a.n}...`);toast(`Opening ${a.n}`,'ok');aHist(`Open ${a.n}`,a,true);$('aGrid').querySelectorAll('.app').forEach(c=>{if(A[+c.dataset.i]===a){c.classList.add('flash');setTimeout(()=>c.classList.remove('flash'),500)}})}
+function launchUrl(u,n){window.open(u,'_blank','noopener');sFB(`Navigating to ${n}...`);toast(`Opening ${n}`,'ok');aHist(`Go to ${n}`,{n,i:'fas fa-globe',c:'#00c8ff'},true)}
+function sFB(m,e){const f=$('fb');f.textContent=m;f.className='feedback vis'+(e?' err':'');clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove('vis'),3000)}
+
+// ===== TOAST =====
+function toast(m,t){const e=document.createElement('div');e.className='toast '+t;const ic={ok:'fas fa-check-circle',err:'fas fa-circle-exclamation',inf:'fas fa-circle-info'};e.innerHTML=`<i class="${ic[t]||ic.inf}"></i><span>${m}</span>`;$('toasts').appendChild(e);setTimeout(()=>{if(e.parentNode)e.remove()},3200)}
+
+// ===== HISTORY =====
+function aHist(c,a,ok){hist.unshift({c,a,ok,t:new Date()});if(hist.length>40)hist.pop();rHist()}
+function rHist(){if(!hist.length){$('hList').innerHTML='<div class="h-empty"><i class="fas fa-terminal"></i>No commands logged</div>';return}$('hList').innerHTML=hist.map(e=>{const t=e.t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});const ic=e.a?e.a.i:'fas fa-question';const cl=e.a?e.a.c:'#3a4263';return`<div class="h-item"><div class="h-ic" style="background:${cl}"><i class="${ic}"></i></div><div class="h-tx"><div class="h-cmd">${e.c}</div><div class="h-tm">${t}</div></div><span class="h-st ${e.ok?'ok':'no'}">${e.ok?'OK':'FAIL'}</span></div>`}).join('')}
+
+// ===== GRID =====
+function rGrid(){$('aGrid').innerHTML='';A.forEach((a,i)=>{const c=document.createElement('button');c.className='app';c.dataset.i=i;c.setAttribute('aria-label','Open '+a.n);c.tabIndex=0;c.innerHTML=`<div class="app-ic" style="background:${a.c}"><i class="${a.i}"></i></div><span class="app-nm">${a.n}</span><span class="app-cat">${a.cat}</span>`;c.addEventListener('click',()=>launch(a));$('aGrid').appendChild(c)});$('aCt').textContent=A.length}
+
+// ===== EVENTS =====
+ $('orbBtn').addEventListener('click',togL);
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();togL()}});
+
+// ===== INIT =====
+rGrid();initV();rHist();$('navDot').className='nav-dot warn';$('navTxt').textContent='Diag Required';
+</script>
+</body>
+</html>
